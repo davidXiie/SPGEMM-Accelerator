@@ -1,0 +1,142 @@
+#! /c/Source/iverilog-install/bin/vvp
+:ivl_version "12.0 (devel)" "(s20150603-1539-g2693dd32b)";
+:ivl_delay_selection "TYPICAL";
+:vpi_time_precision + 0;
+:vpi_module "C:\iverilog\lib\ivl\system.vpi";
+:vpi_module "C:\iverilog\lib\ivl\vhdl_sys.vpi";
+:vpi_module "C:\iverilog\lib\ivl\vhdl_textio.vpi";
+:vpi_module "C:\iverilog\lib\ivl\v2005_math.vpi";
+:vpi_module "C:\iverilog\lib\ivl\va_math.vpi";
+:vpi_module "C:\iverilog\lib\ivl\v2009.vpi";
+S_0000022b1faa7600 .scope package, "$unit" "$unit" 2 1;
+ .timescale 0 0;
+S_0000022b1faa7790 .scope module, "fetch_decode" "fetch_decode" 3 14;
+ .timescale 0 0;
+    .port_info 0 /INPUT 256 "inst";
+    .port_info 1 /OUTPUT 1 "is_load";
+    .port_info 2 /OUTPUT 1 "is_store";
+    .port_info 3 /OUTPUT 1 "is_spgemm";
+    .port_info 4 /OUTPUT 1 "is_sched";
+    .port_info 5 /OUTPUT 1 "is_finish";
+L_0000022b1fb07128 .functor BUFT 1, C4<011>, C4<0>, C4<0>, C4<0>;
+v0000022b1fa9dd50_0 .net/2u *"_ivl_10", 2 0, L_0000022b1fb07128;  1 drivers
+L_0000022b1fb07170 .functor BUFT 1, C4<100>, C4<0>, C4<0>, C4<0>;
+v0000022b1fa9df30_0 .net/2u *"_ivl_14", 2 0, L_0000022b1fb07170;  1 drivers
+L_0000022b1fb071b8 .functor BUFT 1, C4<111>, C4<0>, C4<0>, C4<0>;
+v0000022b1fa9dfd0_0 .net/2u *"_ivl_18", 2 0, L_0000022b1fb071b8;  1 drivers
+L_0000022b1fb07098 .functor BUFT 1, C4<001>, C4<0>, C4<0>, C4<0>;
+v0000022b1fa9e1b0_0 .net/2u *"_ivl_2", 2 0, L_0000022b1fb07098;  1 drivers
+L_0000022b1fb070e0 .functor BUFT 1, C4<010>, C4<0>, C4<0>, C4<0>;
+v0000022b1fa9e430_0 .net/2u *"_ivl_6", 2 0, L_0000022b1fb070e0;  1 drivers
+o0000022b1fab3058 .functor BUFZ 256, C4<zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz>; HiZ drive
+v0000022b1fa9e4d0_0 .net "inst", 255 0, o0000022b1fab3058;  0 drivers
+v0000022b1fa9e930_0 .net "is_finish", 0 0, L_0000022b1fb06cf0;  1 drivers
+v0000022b1fa9e6b0_0 .net "is_load", 0 0, L_0000022b1fb05df0;  1 drivers
+v0000022b1fa9ea70_0 .net "is_sched", 0 0, L_0000022b1fb055d0;  1 drivers
+v0000022b1fa9e570_0 .net "is_spgemm", 0 0, L_0000022b1fb05170;  1 drivers
+v0000022b1fa9e110_0 .net "is_store", 0 0, L_0000022b1fb05e90;  1 drivers
+v0000022b1fa9e250_0 .net "opcode", 2 0, L_0000022b1fb06bb0;  1 drivers
+L_0000022b1fb06bb0 .part o0000022b1fab3058, 0, 3;
+L_0000022b1fb05df0 .cmp/eq 3, L_0000022b1fb06bb0, L_0000022b1fb07098;
+L_0000022b1fb05e90 .cmp/eq 3, L_0000022b1fb06bb0, L_0000022b1fb070e0;
+L_0000022b1fb05170 .cmp/eq 3, L_0000022b1fb06bb0, L_0000022b1fb07128;
+L_0000022b1fb055d0 .cmp/eq 3, L_0000022b1fb06bb0, L_0000022b1fb07170;
+L_0000022b1fb06cf0 .cmp/eq 3, L_0000022b1fb06bb0, L_0000022b1fb071b8;
+S_0000022b1faabff0 .scope module, "load_decode" "load_decode" 3 37;
+ .timescale 0 0;
+    .port_info 0 /INPUT 256 "inst";
+    .port_info 1 /OUTPUT 64 "dram_offset";
+    .port_info 2 /OUTPUT 32 "sram_offset";
+    .port_info 3 /OUTPUT 32 "xsize";
+    .port_info 4 /OUTPUT 3 "mem_id";
+L_0000022b1fb07200 .functor BUFT 1, C4<000000>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb05670_0 .net/2u *"_ivl_0", 5 0, L_0000022b1fb07200;  1 drivers
+v0000022b1fb05b70_0 .net *"_ivl_3", 57 0, L_0000022b1fb05fd0;  1 drivers
+v0000022b1fb057b0_0 .net "dram_offset", 63 0, L_0000022b1fb06e30;  1 drivers
+o0000022b1fab3358 .functor BUFZ 256, C4<zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz>; HiZ drive
+v0000022b1fb06c50_0 .net "inst", 255 0, o0000022b1fab3358;  0 drivers
+v0000022b1fb05990_0 .net "mem_id", 2 0, L_0000022b1fb050d0;  1 drivers
+v0000022b1fb05f30_0 .net "sram_offset", 31 0, L_0000022b1fb06250;  1 drivers
+v0000022b1fb06d90_0 .net "xsize", 31 0, L_0000022b1fb06ed0;  1 drivers
+L_0000022b1fb05fd0 .part o0000022b1fab3358, 6, 58;
+L_0000022b1fb06e30 .concat [ 58 6 0 0], L_0000022b1fb05fd0, L_0000022b1fb07200;
+L_0000022b1fb06250 .part o0000022b1fab3358, 64, 32;
+L_0000022b1fb06ed0 .part o0000022b1fab3358, 96, 32;
+L_0000022b1fb050d0 .part o0000022b1fab3358, 3, 3;
+S_0000022b1faac180 .scope module, "spgemm_decode" "spgemm_decode" 3 75;
+ .timescale 0 0;
+    .port_info 0 /INPUT 256 "inst";
+    .port_info 1 /OUTPUT 32 "a_row_ptr_sram";
+    .port_info 2 /OUTPUT 32 "a_col_idx_sram";
+    .port_info 3 /OUTPUT 32 "a_val_sram";
+    .port_info 4 /OUTPUT 32 "b_row_ptr_sram";
+    .port_info 5 /OUTPUT 32 "b_col_idx_sram";
+    .port_info 6 /OUTPUT 32 "b_val_sram";
+    .port_info 7 /OUTPUT 10 "M";
+    .port_info 8 /OUTPUT 10 "K";
+    .port_info 9 /OUTPUT 10 "N";
+v0000022b1fb05d50_0 .net "K", 9 0, L_0000022b1fb50630;  1 drivers
+v0000022b1fb06110_0 .net "M", 9 0, L_0000022b1fb4f410;  1 drivers
+v0000022b1fb06570_0 .net "N", 9 0, L_0000022b1fb50770;  1 drivers
+L_0000022b1fb07248 .functor BUFT 1, C4<000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb05850_0 .net/2u *"_ivl_0", 191 0, L_0000022b1fb07248;  1 drivers
+v0000022b1fb06750_0 .net *"_ivl_19", 8 0, L_0000022b1fb4f910;  1 drivers
+L_0000022b1fb07290 .functor BUFT 1, C4<0>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb06070_0 .net *"_ivl_23", 0 0, L_0000022b1fb07290;  1 drivers
+v0000022b1fb05350_0 .net *"_ivl_25", 8 0, L_0000022b1fb50810;  1 drivers
+L_0000022b1fb072d8 .functor BUFT 1, C4<0>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb067f0_0 .net *"_ivl_29", 0 0, L_0000022b1fb072d8;  1 drivers
+v0000022b1fb05a30_0 .net *"_ivl_3", 57 0, L_0000022b1fb052b0;  1 drivers
+v0000022b1fb06a70_0 .net *"_ivl_31", 8 0, L_0000022b1fb4f7d0;  1 drivers
+L_0000022b1fb07320 .functor BUFT 1, C4<0>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb06390_0 .net *"_ivl_35", 0 0, L_0000022b1fb07320;  1 drivers
+v0000022b1fb06430_0 .net *"_ivl_4", 249 0, L_0000022b1fb053f0;  1 drivers
+v0000022b1fb064d0_0 .net "a_col_idx_sram", 31 0, L_0000022b1fb05530;  1 drivers
+v0000022b1fb06890_0 .net "a_row_ptr_sram", 31 0, L_0000022b1fb05490;  1 drivers
+v0000022b1fb05ad0_0 .net "a_val_sram", 31 0, L_0000022b1fb05710;  1 drivers
+v0000022b1fb05c10_0 .net "b_col_idx_sram", 31 0, L_0000022b1fb4feb0;  1 drivers
+v0000022b1fb061b0_0 .net "b_row_ptr_sram", 31 0, L_0000022b1fb062f0;  1 drivers
+v0000022b1fb05cb0_0 .net "b_val_sram", 31 0, L_0000022b1fb4f870;  1 drivers
+o0000022b1fab3868 .functor BUFZ 256, C4<zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz>; HiZ drive
+v0000022b1fb058f0_0 .net "inst", 255 0, o0000022b1fab3868;  0 drivers
+L_0000022b1fb052b0 .part o0000022b1fab3868, 6, 58;
+L_0000022b1fb053f0 .concat [ 58 192 0 0], L_0000022b1fb052b0, L_0000022b1fb07248;
+L_0000022b1fb05490 .part L_0000022b1fb053f0, 0, 32;
+L_0000022b1fb05530 .part o0000022b1fab3868, 64, 32;
+L_0000022b1fb05710 .part o0000022b1fab3868, 96, 32;
+L_0000022b1fb062f0 .part o0000022b1fab3868, 128, 32;
+L_0000022b1fb4feb0 .part o0000022b1fab3868, 160, 32;
+L_0000022b1fb4f870 .part o0000022b1fab3868, 192, 32;
+L_0000022b1fb4f910 .part o0000022b1fab3868, 224, 9;
+L_0000022b1fb4f410 .concat [ 9 1 0 0], L_0000022b1fb4f910, L_0000022b1fb07290;
+L_0000022b1fb50810 .part o0000022b1fab3868, 233, 9;
+L_0000022b1fb50630 .concat [ 9 1 0 0], L_0000022b1fb50810, L_0000022b1fb072d8;
+L_0000022b1fb4f7d0 .part o0000022b1fab3868, 242, 9;
+L_0000022b1fb50770 .concat [ 9 1 0 0], L_0000022b1fb4f7d0, L_0000022b1fb07320;
+S_0000022b1faa69b0 .scope module, "store_decode" "store_decode" 3 56;
+ .timescale 0 0;
+    .port_info 0 /INPUT 256 "inst";
+    .port_info 1 /OUTPUT 64 "dram_offset";
+    .port_info 2 /OUTPUT 32 "sram_offset";
+    .port_info 3 /OUTPUT 32 "xsize";
+    .port_info 4 /OUTPUT 3 "mem_id";
+L_0000022b1fb07368 .functor BUFT 1, C4<000000>, C4<0>, C4<0>, C4<0>;
+v0000022b1fb05210_0 .net/2u *"_ivl_0", 5 0, L_0000022b1fb07368;  1 drivers
+v0000022b1fb06930_0 .net *"_ivl_3", 57 0, L_0000022b1fb50a90;  1 drivers
+v0000022b1fb06f70_0 .net "dram_offset", 63 0, L_0000022b1fb506d0;  1 drivers
+o0000022b1fab3b08 .functor BUFZ 256, C4<zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz>; HiZ drive
+v0000022b1fb066b0_0 .net "inst", 255 0, o0000022b1fab3b08;  0 drivers
+v0000022b1fb069d0_0 .net "mem_id", 2 0, L_0000022b1fb504f0;  1 drivers
+v0000022b1fb06b10_0 .net "sram_offset", 31 0, L_0000022b1fb4f5f0;  1 drivers
+v0000022b1fb06610_0 .net "xsize", 31 0, L_0000022b1fb4faf0;  1 drivers
+L_0000022b1fb50a90 .part o0000022b1fab3b08, 6, 58;
+L_0000022b1fb506d0 .concat [ 58 6 0 0], L_0000022b1fb50a90, L_0000022b1fb07368;
+L_0000022b1fb4f5f0 .part o0000022b1fab3b08, 64, 32;
+L_0000022b1fb4faf0 .part o0000022b1fab3b08, 96, 32;
+L_0000022b1fb504f0 .part o0000022b1fab3b08, 3, 3;
+# The file index is used to find the file name in the following table.
+:file_names 4;
+    "N/A";
+    "<interactive>";
+    "-";
+    "rtl/infrastructure/decode.v";
