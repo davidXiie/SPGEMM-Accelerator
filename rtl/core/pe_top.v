@@ -23,8 +23,8 @@ module pe_top #(
     // Task descriptor
     input  wire [`MAX_DIM_BITS-1:0]  row_start,
     input  wire [`MAX_DIM_BITS-1:0]  row_end,
-    input  wire [31:0]               a_ptr_start,
-    input  wire [31:0]               a_ptr_end,
+    input  wire [15:0]               a_ptr_start,
+    input  wire [15:0]               a_ptr_end,
     input  wire [`MAX_DIM_BITS-1:0]  K,
     input  wire [`MAX_DIM_BITS-1:0]  N,
 
@@ -52,8 +52,8 @@ module pe_top #(
         .DEPTH(`PE_ABUF_DEPTH), .DEPTH_LOG(`PE_ABUF_DEPTH_LOG), .DATA_WIDTH(`DATA_WIDTH)
     ) u_a_buffer (
         .wr_en    (1'b0),  // A Buffer loaded during load phase from GlobalBuffer
-        .wr_addr  (0),
-        .wr_data  (0),
+        .wr_addr  ({`PE_ABUF_DEPTH_LOG{1'b0}}),
+        .wr_data  ({`DATA_WIDTH{1'b0}}),
         .rd_en    (a_buf_rd_en),
         .rd_addr  (a_buf_rd_addr),
         .rd_data  (a_buf_rd_data),
@@ -74,8 +74,8 @@ module pe_top #(
         .N_BANKS(`N_MAC), .DEPTH(`PE_BBUF_DEPTH), .DEPTH_LOG(`PE_BBUF_DEPTH_LOG), .BANK_WIDTH(`DATA_WIDTH)
     ) u_b_buffer (
         .wr_en    (1'b0),  // B Buffer loaded during load phase
-        .wr_addr  (0),
-        .wr_data  (0),
+        .wr_addr  ({`PE_BBUF_DEPTH_LOG{1'b0}}),
+        .wr_data  ({`N_MAC*`DATA_WIDTH{1'b0}}),
         .rd_en    (b_buf_rd_en),
         .rd_addr  (b_buf_rd_addr),
         .rd_data  (b_buf_rd_data),

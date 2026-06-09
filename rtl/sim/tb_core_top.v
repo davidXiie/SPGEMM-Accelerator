@@ -15,7 +15,7 @@ module tb_core_top;
     // CR interface
     reg  cr_launch;
     reg  [`AXI_ADDR_WIDTH-1:0] ins_baddr;
-    reg  [31:0] ins_count;
+    reg  [15:0] ins_count;
     wire cr_finish;
 
     // AXI Read
@@ -45,19 +45,23 @@ module tb_core_top;
     wire m_axi_bready;
     reg  [1:0] m_axi_bresp;
 
-    wire [31:0] cycle_counter;
+    wire [15:0] cycle_counter;
 
     //=========================================================================
     // Clock and Reset
     //=========================================================================
-    always #5 aclk = ~aclk;  // 100MHz clock
+`ifndef COCOTB_SIM
+    always #5 aclk = ~aclk;  // 100MHz clock (standalone mode)
 
+`endif
+`ifndef COCOTB_SIM
+    // Standalone Verilog TB: drive signals and auto-finish
     initial begin
         aclk   = 1'b0;
         aresetn = 1'b0;
         cr_launch  = 1'b0;
         ins_baddr  = 64'h0;
-        ins_count  = 32'd0;
+        ins_count  = 16'd0;
 
         m_axi_arready = 1'b0;
         m_axi_rvalid  = 1'b0;
@@ -93,6 +97,17 @@ module tb_core_top;
         $display("[TB] Test completed at cycle %d", $time);
         $finish;
     end
+`else
+    // Cocotb mode: Python testbench drives all signals and AXI slaves.
+    // Only keep clock generation and initial tie-offs.
+    initial begin
+        aclk      = 1'b0;
+        aresetn   = 1'b0;
+        cr_launch = 1'b0;
+        ins_baddr = 64'h0;
+        ins_count = 32'd0;
+    end
+`endif
 
     //=========================================================================
     // DUT Instantiation
@@ -127,8 +142,9 @@ module tb_core_top;
         .aresetn       (aresetn)
     );
 
+`ifndef COCOTB_SIM
     //=========================================================================
-    // Simple AXI memory model for instruction fetch
+    // Simple AXI memory model for standalone Verilog simulation
     //=========================================================================
     reg [511:0] mem [0:1023];  // small memory model
 
@@ -139,7 +155,6 @@ module tb_core_top;
         mem[0] = {224'h0, 4'd4, 4'd4, 4'd4,    // M,K,N (last 12 bits of dims)
                   32'h100, 32'h080, 32'h060,     // B_val, B_col, B_row SRAM bases
                   32'h040, 32'h020, 32'h000};    // A_val, A_col, A_row SRAM bases
-        // mem[0][2:0] = 3'b011 (SPGEMM op)
 
         // Store instruction
         mem[1] = 256'h0;
@@ -196,6 +211,7 @@ module tb_core_top;
             end
         end
     end
+`endif
 
     //=========================================================================
     // Monitoring

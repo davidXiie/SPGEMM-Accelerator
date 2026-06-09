@@ -54,10 +54,10 @@ module pe_decompress (
 
     localparam ENTRY_BUF_DEPTH = 64;
     localparam ENTRY_BUF_BITS  = 6;
-    // Entry: [43:34] b_len (10b), [33:16] b_start (18b), [15:0] a_val (16b)
-    localparam E_LEN_HI  = 43;
-    localparam E_LEN_LO  = 34;
-    localparam E_START_HI = 33;
+    // Entry: [41:32] b_len (10b), [31:16] b_start (16b), [15:0] a_val (16b)
+    localparam E_LEN_HI  = 41;
+    localparam E_LEN_LO  = 32;
+    localparam E_START_HI = 31;
     localparam E_START_LO = 16;
     localparam E_VAL_HI  = 15;
     localparam E_VAL_LO  = 0;
@@ -86,14 +86,14 @@ module pe_decompress (
     // A Row / Element State
     //=========================================================================
     reg [`MAX_DIM_BITS-1:0] current_row;
-    reg [31:0] a_ptr_start_i, a_ptr_end_i;
-    reg [31:0] a_ptr_current;
+    reg [15:0] a_ptr_start_i, a_ptr_end_i;
+    reg [15:0] a_ptr_current;
     reg [`DATA_WIDTH-1:0]    a_val_cur;
     reg [`MAX_DIM_BITS-1:0]  a_k_cur;
-    reg [31:0] b_start_cur, b_len_cur;
+    reg [15:0] b_start_cur, b_len_cur;
 
     // Entry Buffer
-    reg [ENTRY_BUF_DEPTH-1:0][43:0] entry_buf;
+    reg [41:0] entry_buf [0:ENTRY_BUF_DEPTH-1];
     reg [ENTRY_BUF_BITS-1:0] entry_wr_ptr;
     reg [ENTRY_BUF_BITS:0]   entry_count;
     reg [ENTRY_BUF_BITS-1:0] entry_rd_ptr;
@@ -101,8 +101,8 @@ module pe_decompress (
     // Pre-loaded "next" entry registers (loaded 1 cycle ahead of need)
     reg                        next_valid;    // 1: next entry is pre-loaded
     reg [`DATA_WIDTH-1:0]      next_a_val;
-    reg [31:0]                 next_b_start;
-    reg [31:0]                 next_b_len;
+    reg [15:0]                 next_b_start;
+    reg [15:0]                 next_b_len;
 
     // Concatenated B Stream
     reg [`WORKLOAD_BITS-1:0] total_B_nnz;
@@ -119,6 +119,9 @@ module pe_decompress (
 
     // A row_ptr load tracking
     reg a_ptr_end_i_loaded;
+
+    // Row-Block streaming base address
+    reg [15:0] b_base;
 
     //=========================================================================
     // State Transition
@@ -226,18 +229,18 @@ module pe_decompress (
                     end
                     PS_B_RD0: begin
                         if (b_buf_rd_valid_r)
-                            b_start_cur <= b_buf_rd_data_r[31:0];
+                            b_start_cur <= b_buf_rd_data_r[15:0];
                     end
                     PS_B_RD1: begin
                         if (b_buf_rd_valid_r) begin
-                            b_len_cur  <= b_buf_rd_data_r[31:0] - b_start_cur;
+                            b_len_cur  <= b_buf_rd_data_r[15:0] - b_start_cur;
                             entry_buf[entry_wr_ptr] <= {
-                                b_buf_rd_data_r[31:0] - b_start_cur,  // b_len
-                                b_start_cur[17:0],
+                                b_buf_rd_data_r[15:0] - b_start_cur,  // b_len
+                                b_start_cur[15:0],
                                 a_val_cur
                             };
                             entry_wr_ptr <= entry_wr_ptr + 1;
-                            total_B_nnz  <= total_B_nnz + (b_buf_rd_data_r[31:0] - b_start_cur);
+                            total_B_nnz  <= total_B_nnz + (b_buf_rd_data_r[15:0] - b_start_cur);
                         end
                     end
                 endcase
@@ -403,7 +406,7 @@ module pe_decompress (
                     end
                     PS_B_RD1: begin
                         b_buf_rd_en[0] = 1'b1;
-                        b_buf_rd_addr[0 +: `PE_BBUF_DEPTH_LOG] = (a_k_cur + 1)[`PE_BBUF_DEPTH_LOG-1:0];
+                        b_buf_rd_addr[0 +: `PE_BBUF_DEPTH_LOG] = a_k_cur + 1;
                     end
                     default: ;
                 endcase
@@ -412,19 +415,19 @@ module pe_decompress (
             ST_ROW_STREAM: begin
                 // Row-Block B streaming: read N_MAC B elements from current entry's segment.
                 // b_start_cur + (b_len_cur - b_rem) = offset within current B row.
-                wire [31:0] b_base = b_start_cur + (b_len_cur - b_rem);
+                b_base = b_start_cur + (b_len_cur - b_rem);
                 for (integer m = 0; m < `N_MAC; m = m + 1) begin
                     if (batch_cnt < total_batches && (b_pos_in_concat + m < total_B_nnz)) begin
                         if (m < b_rem) begin
                             // Within current entry
                             b_buf_rd_en[m] = 1'b1;
                             b_buf_rd_addr[m*`PE_BBUF_DEPTH_LOG +: `PE_BBUF_DEPTH_LOG]
-                                = (b_base + m)[`PE_BBUF_DEPTH_LOG-1:0];
+                                = b_base + m;
                         end else if (next_valid) begin
                             // Cross boundary: read from next entry
                             b_buf_rd_en[m] = 1'b1;
                             b_buf_rd_addr[m*`PE_BBUF_DEPTH_LOG +: `PE_BBUF_DEPTH_LOG]
-                                = (next_b_start + (m - b_rem))[`PE_BBUF_DEPTH_LOG-1:0];
+                                = next_b_start + (m - b_rem);
                         end else begin
                             b_buf_rd_en[m] = 1'b0;
                         end

@@ -20,8 +20,8 @@ module store #(
     output wire                      done,
 
     // Read from OutputScratchpad
-    input  wire                      osp_rd_en,
-    input  wire [`OUTBUF_DEPTH_LOG-1:0] osp_rd_addr,
+    output wire                      osp_rd_en,
+    output wire [`OUTBUF_DEPTH_LOG-1:0] osp_rd_addr,
     input  wire [`AXI_DATA_WIDTH-1:0]  osp_rd_data,
     input  wire                      osp_rd_valid,
 
@@ -57,8 +57,8 @@ module store #(
     // Instruction storage
     reg [`INST_WIDTH-1:0] stored_inst;
     wire [`AXI_ADDR_WIDTH-1:0] dram_offset;
-    wire [31:0] sram_offset;
-    wire [31:0] xsize;
+    wire [15:0] sram_offset;
+    wire [15:0] xsize;
 
     store_decode u_decode (
         .inst        (stored_inst),
@@ -69,22 +69,22 @@ module store #(
     );
 
     // Transfer calculation
-    wire [31:0] n_block_per_transfer = `AXI_DATA_WIDTH / `DATA_WIDTH;  // 512/16 = 32
-    wire [31:0] n_block_per_transfer_log = 5;  // log2(32)
-    wire [31:0] transfer_total = ((xsize - 1) >> n_block_per_transfer_log) + 1;
+    wire [15:0] n_block_per_transfer = `AXI_DATA_WIDTH / `DATA_WIDTH;  // 512/16 = 32
+    wire [15:0] n_block_per_transfer_log = 5;  // log2(32)
+    wire [15:0] transfer_total = ((xsize - 1) >> n_block_per_transfer_log) + 1;
 
     reg [`AXI_ADDR_WIDTH-1:0] waddr;
     reg [7:0]  wlen;
     reg [7:0]  wcnt;
-    reg [31:0] transfer_rem;
-    reg [31:0] saddr;
-    reg [31:0] max_transfer;
-    reg [31:0] max_transfer_bytes;
-    reg [31:0] total_bytes;
-    reg [31:0] total_bytes_written;
-    wire [31:0] total_bytes_rem;
-    wire [31:0] curr_bytes;
-    wire [31:0] curr_strb;
+    reg [15:0] transfer_rem;
+    reg [15:0] saddr;
+    reg [15:0] max_transfer;
+    reg [15:0] max_transfer_bytes;
+    reg [15:0] total_bytes;
+    reg [15:0] total_bytes_written;
+    wire [15:0] total_bytes_rem;
+    wire [15:0] curr_bytes;
+    wire [15:0] curr_strb;
 
     // Instruction queue
     reg inst_q_valid;
@@ -210,7 +210,7 @@ module store #(
     // AXI Write Data
     assign m_axi_wvalid  = (state == STATE_WRITE_DATA) && osp_rd_valid;
     assign m_axi_wdata   = osp_rd_data;
-    assign m_axi_wstrb   = {{(`AXI_STRB_WIDTH-curr_bytes){1'b0}}, {curr_bytes{1'b1}}};
+    assign m_axi_wstrb   = curr_strb;
     assign m_axi_wlast   = (wcnt == wlen);
 
     // AXI Write Response

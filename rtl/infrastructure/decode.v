@@ -37,8 +37,8 @@ endmodule
 module load_decode (
     input  wire [`INST_WIDTH-1:0]  inst,
     output wire [`AXI_ADDR_WIDTH-1:0] dram_offset,
-    output wire [31:0]                sram_offset,
-    output wire [31:0]                xsize,
+    output wire [15:0]                sram_offset,
+    output wire [15:0]                xsize,
     output wire [2:0]                 mem_id
 );
 
@@ -56,8 +56,8 @@ endmodule
 module store_decode (
     input  wire [`INST_WIDTH-1:0]  inst,
     output wire [`AXI_ADDR_WIDTH-1:0] dram_offset,
-    output wire [31:0]                sram_offset,
-    output wire [31:0]                xsize,
+    output wire [15:0]                sram_offset,
+    output wire [15:0]                xsize,
     output wire [2:0]                 mem_id
 );
 
@@ -74,12 +74,12 @@ endmodule
 //=============================================================================
 module spgemm_decode (
     input  wire [`INST_WIDTH-1:0]  inst,
-    output wire [31:0]                a_row_ptr_sram,
-    output wire [31:0]                a_col_idx_sram,
-    output wire [31:0]                a_val_sram,
-    output wire [31:0]                b_row_ptr_sram,
-    output wire [31:0]                b_col_idx_sram,
-    output wire [31:0]                b_val_sram,
+    output wire [15:0]                a_row_ptr_sram,
+    output wire [15:0]                a_col_idx_sram,
+    output wire [15:0]                a_val_sram,
+    output wire [15:0]                b_row_ptr_sram,
+    output wire [15:0]                b_col_idx_sram,
+    output wire [15:0]                b_val_sram,
     output wire [`MAX_DIM_BITS-1:0]   M,
     output wire [`MAX_DIM_BITS-1:0]   K,
     output wire [`MAX_DIM_BITS-1:0]   N

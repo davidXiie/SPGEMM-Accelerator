@@ -51,8 +51,8 @@ module load #(
     // Instruction storage
     reg [`INST_WIDTH-1:0] stored_inst;
     wire [`AXI_ADDR_WIDTH-1:0] dram_offset;
-    wire [31:0] sram_offset;
-    wire [31:0] xsize;
+    wire [15:0] sram_offset;
+    wire [15:0] xsize;
 
     load_decode u_decode (
         .inst        (stored_inst),
@@ -63,16 +63,16 @@ module load #(
     );
 
     // Transfer calculation
-    wire [31:0] n_block_per_transfer = `AXI_DATA_WIDTH / `DATA_WIDTH;  // 512/16 = 32 FP16 elements per beat
-    wire [31:0] n_block_per_transfer_log = 5;  // log2(32)
-    wire [31:0] transfer_total = ((xsize - 1) >> n_block_per_transfer_log) + 1;
+    wire [15:0] n_block_per_transfer = `AXI_DATA_WIDTH / `DATA_WIDTH;  // 512/16 = 32 FP16 elements per beat
+    wire [15:0] n_block_per_transfer_log = 5;  // log2(32)
+    wire [15:0] transfer_total = ((xsize - 1) >> n_block_per_transfer_log) + 1;
 
     reg [`AXI_ADDR_WIDTH-1:0] raddr;
     reg [7:0]  rlen;
     reg [7:0]  rlen_rem;
-    reg [31:0] transfer_rem;
-    reg [31:0] saddr;
-    reg [31:0] max_transfer;
+    reg [15:0] transfer_rem;
+    reg [15:0] saddr;
+    reg [15:0] max_transfer;
 
     // Data queue
     reg [DATA_QUEUE_DEPTH-1:0][`AXI_DATA_WIDTH-1:0] data_q;

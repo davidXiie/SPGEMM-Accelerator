@@ -16,7 +16,7 @@ module fetch #(
     // Control
     input  wire                      launch,
     input  wire [`AXI_ADDR_WIDTH-1:0] ins_baddr,
-    input  wire [31:0]               ins_count,
+    input  wire [15:0]               ins_count,
 
     // AXI Read Master (to fetch instructions from DRAM)
     output wire                      m_axi_arvalid,
@@ -76,9 +76,9 @@ module fetch #(
     reg [`AXI_ADDR_WIDTH-1:0] raddr;
     reg [7:0]  rlen;
     reg [7:0]  ilen;
-    reg [31:0] xrem;
-    reg [31:0] xsize;
-    reg [31:0] xmax;
+    reg [15:0] xrem;
+    reg [15:0] xsize;
+    reg [15:0] xmax;
 
     // Split state
     reg [INS_PER_TRANSFER_LOG:0] pack_sel;  // which instruction in the AXI beat
@@ -107,12 +107,12 @@ module fetch #(
     assign launch_pulse = launch && !launch_r;
 
     // Derived
-    wire [31:0] xsize_comb = (ins_count >> INS_PER_TRANSFER_LOG) - 1;
-    wire [31:0] xmax_val   = (1 << `AXI_LEN_WIDTH);
+    wire [15:0] xsize_comb = (ins_count >> INS_PER_TRANSFER_LOG) - 1;
+    wire [15:0] xmax_val   = (1 << `AXI_LEN_WIDTH);
 
     // Instruction opcode decode
-    assign inst_opcode = inst_pack[pack_sel*`INST_WIDTH +: `INST_WIDTH][2:0];
-    assign inst_memid  = inst_pack[pack_sel*`INST_WIDTH +: `INST_WIDTH][5:3];
+    assign inst_opcode = cur_inst[2:0];
+    assign inst_memid  = cur_inst[5:3];
     assign is_load    = (inst_opcode == `OP_LOAD);
     assign is_store   = (inst_opcode == `OP_STORE);
     assign is_spgemm  = (inst_opcode == `OP_SPGEMM);

@@ -70,7 +70,7 @@ module c_csr_writer (
 
     reg [`MAX_DIM_BITS-1:0] collect_count;
     reg [`MAX_DIM_BITS-1:0] current_write_row;
-    reg [31:0] collect_write_addr;
+    reg [15:0] collect_write_addr;
 
     // Per-row temporary storage (simplified: write to OBuf directly)
     reg [`OUTBUF_DEPTH_LOG-1:0] col_val_write_ptr;

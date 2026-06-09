@@ -1,7 +1,6 @@
 # SPGEMM-Accelerator Verilog RTL 文件列表
 
 ## include (全局头文件)
-+incdir+rtl/include
 rtl/include/defines.vh
 rtl/include/isa.vh
 

@@ -28,15 +28,15 @@ module scheduler (
     input  wire [`MAX_DIM_BITS-1:0]  N,
 
     // SRAM base addresses (offsets in GlobalBuffer, each entry = BANK_BLOCK_SIZE bits)
-    input  wire [31:0]               a_row_ptr_base,
-    input  wire [31:0]               a_col_idx_base,
-    input  wire [31:0]               b_row_ptr_base,
+    input  wire [15:0]               a_row_ptr_base,
+    input  wire [15:0]               a_col_idx_base,
+    input  wire [15:0]               b_row_ptr_base,
 
     // Task output (to PEs)
     output reg  [`N_PE-1:0][`MAX_DIM_BITS-1:0] pe_row_start,
     output reg  [`N_PE-1:0][`MAX_DIM_BITS-1:0] pe_row_end,
-    output reg  [`N_PE-1:0][31:0]              pe_a_ptr_start,
-    output reg  [`N_PE-1:0][31:0]              pe_a_ptr_end,
+    output reg  [`N_PE-1:0][15:0]              pe_a_ptr_start,
+    output reg  [`N_PE-1:0][15:0]              pe_a_ptr_end,
     output reg  [`N_PE-1:0]                    pe_task_valid,
 
     // GlobalBuffer read interface
@@ -89,7 +89,7 @@ module scheduler (
     // B Row Length Generator State
     //=========================================================================
     reg [`MAX_DIM_BITS-1:0] b_row_ptr_idx;  // current row k being processed
-    reg [31:0] b_row_ptr_k, b_row_ptr_kp1;
+    reg [15:0] b_row_ptr_k, b_row_ptr_kp1;
     reg [`WORKLOAD_BITS-1:0] b_row_nnz [`MAX_K-1:0];  // b_row_nnz[k] array
     reg b_read_phase;  // 0: read B_row_ptr[k], 1: read B_row_ptr[k+1]
 
@@ -97,8 +97,8 @@ module scheduler (
     // A Row Workload Analyzer State (Row-Block formula)
     //=========================================================================
     reg [`MAX_DIM_BITS-1:0] a_row_idx;     // current A row i
-    reg [31:0] a_ptr_start_i, a_ptr_end_i;  // A_row_ptr[i], A_row_ptr[i+1]
-    reg [31:0] a_ptr_current;               // current position p in A CSR
+    reg [15:0] a_ptr_start_i, a_ptr_end_i;  // A_row_ptr[i], A_row_ptr[i+1]
+    reg [15:0] a_ptr_current;               // current position p in A CSR
     reg [`WORKLOAD_BITS-1:0] row_eff_acc;   // accumulator: sum of b_row_nnz for current row
     reg [`WORKLOAD_BITS-1:0] row_cyc [`MAX_M-1:0];  // row_cyc[i] = ceil(row_eff[i]/N_MAC)
     reg [`WORKLOAD_BITS-1:0] total_cycle_work;
@@ -107,12 +107,12 @@ module scheduler (
     // Remaining-Aware Row Partitioner State
     //=========================================================================
     reg [`MAX_DIM_BITS-1:0] part_row_idx;   // current row being assigned
-    reg [31:0] assigned_work;
-    reg [31:0] cur_pe_load;
+    reg [15:0] assigned_work;
+    reg [15:0] cur_pe_load;
     reg [`N_PE_BITS:0] cur_pe;              // current PE index (0 to N_PE)
-    reg [31:0] dynamic_target;
-    reg [31:0] remaining_work;
-    reg [31:0] remaining_pe;
+    reg [15:0] dynamic_target;
+    reg [15:0] remaining_work;
+    reg [15:0] remaining_pe;
     reg [`WORKLOAD_BITS-1:0] row_w;
 
     //=========================================================================
@@ -260,11 +260,11 @@ module scheduler (
             if (rdata_valid_r) begin
                 if (!b_read_phase) begin
                     // Just read B_row_ptr[k] (lower 32 bits)
-                    b_row_ptr_k <= rdata_r[31:0];
+                    b_row_ptr_k <= rdata_r[15:0];
                     b_read_phase <= 1'b1;
                 end else begin
                     // Just read B_row_ptr[k+1]
-                    b_row_ptr_kp1 <= rdata_r[31:0];
+                    b_row_ptr_kp1 <= rdata_r[15:0];
                     b_read_phase <= 1'b0;
                     b_row_ptr_idx <= b_row_ptr_idx + 1'b1;
                 end
@@ -275,7 +275,7 @@ module scheduler (
     // Store b_row_nnz[k] when both reads complete
     always @(posedge aclk) begin
         if (phase == PHASE_B_ROW_NNZ && rdata_valid_r && b_read_phase) begin
-            b_row_nnz[b_row_ptr_idx] <= rdata_r[31:0] - b_row_ptr_k;
+            b_row_nnz[b_row_ptr_idx] <= rdata_r[15:0] - b_row_ptr_k;
         end
     end
 
@@ -307,12 +307,12 @@ module scheduler (
             if (rdata_valid_r) begin
                 case (ana_sub)
                     ANA_RD_PTR_I: begin
-                        // Got A_row_ptr[i] from [31:0]
-                        a_ptr_start_i <= rdata_r[31:0];
+                        // Got A_row_ptr[i] from [15:0]
+                        a_ptr_start_i <= rdata_r[15:0];
                     end
                     ANA_RD_PTR_IP1: begin
                         // Got A_row_ptr[i+1]
-                        a_ptr_end_i <= rdata_r[31:0];
+                        a_ptr_end_i <= rdata_r[15:0];
                         a_ptr_current <= a_ptr_start_i;  // start scanning from p = a_start
                         row_eff_acc <= 0;  // clear accumulator for new row
                     end
@@ -355,10 +355,10 @@ module scheduler (
     //   dynamic_target = ceil(remaining_work / remaining_pe)
     //   Nearest boundary comparison
     //=========================================================================
-    wire [31:0] new_load = cur_pe_load + row_w;
+    wire [15:0] new_load = cur_pe_load + row_w;
     wire cross_boundary = (new_load >= dynamic_target) && (remaining_pe > 1);
-    wire [31:0] err_before = dynamic_target - cur_pe_load;
-    wire [31:0] err_after  = new_load - dynamic_target;
+    wire [15:0] err_before = dynamic_target - cur_pe_load;
+    wire [15:0] err_after  = new_load - dynamic_target;
     wire take_this_row = (cur_pe_load == 0) || (err_after <= err_before) || !cross_boundary;
 
     always @(posedge aclk or negedge aresetn) begin
@@ -416,7 +416,7 @@ module scheduler (
     //   For each PE p, read A_row_ptr[pe_row_start[p]] and A_row_ptr[pe_row_end[p]+1]
     //   to generate pe_a_ptr_start[p] and pe_a_ptr_end[p].
     //=========================================================================
-    reg [31:0] task_start_val;  // temporary latch for A_row_ptr[start]
+    reg [15:0] task_start_val;  // temporary latch for A_row_ptr[start]
     always @(posedge aclk or negedge aresetn) begin
         if (!aresetn) begin
             task_pe_idx <= 0;
@@ -433,12 +433,12 @@ module scheduler (
                 case (task_sub)
                     TASK_RD_START: begin
                         // Got A_row_ptr[pe_row_start[p]]
-                        task_start_val <= rdata_r[31:0];
+                        task_start_val <= rdata_r[15:0];
                     end
                     TASK_RD_END: begin
                         // Got A_row_ptr[pe_row_end[p]+1]
                         pe_a_ptr_start[task_pe_idx] <= task_start_val;
-                        pe_a_ptr_end[task_pe_idx]   <= rdata_r[31:0];
+                        pe_a_ptr_end[task_pe_idx]   <= rdata_r[15:0];
                     end
                     TASK_NEXT_PE: begin
                         // No data latch here, just advance PE index
@@ -455,7 +455,7 @@ module scheduler (
     //=========================================================================
     // GlobalBuffer Read Address Generation
     //   Each GBuf address returns BANK_BLOCK_SIZE (64 bits).
-    //   Row_ptr/col_idx values are 32-bit, extracted from [31:0] of result.
+    //   Row_ptr/col_idx values are 16-bit, extracted from [15:0] of result.
     //=========================================================================
     always @(*) begin
         gbuf_rd_en = 1'b0;
@@ -467,7 +467,7 @@ module scheduler (
                 // B_row_ptr[b_row_ptr_idx + b_read_phase] at offset b_row_ptr_base
                 gbuf_rd_addr = b_row_ptr_base[`GBUF_DEPTH_LOG-1:0]
                              + b_row_ptr_idx
-                             + {(`GBUF_DEPTH_LOG-1){1'b0}, b_read_phase};
+                             + b_read_phase;
             end
 
             PHASE_A_ANALYZE: begin

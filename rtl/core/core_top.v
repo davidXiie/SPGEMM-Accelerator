@@ -13,7 +13,7 @@ module core_top (
     // Control Register interface (AXI-Lite slave signals via Wrapper)
     input  wire                      cr_launch,
     input  wire [`AXI_ADDR_WIDTH-1:0] ins_baddr,
-    input  wire [31:0]               ins_count,
+    input  wire [15:0]               ins_count,
     output wire                      cr_finish,
 
     // AXI Read Master (for Fetch + Load)
@@ -44,7 +44,7 @@ module core_top (
     input  wire [1:0]                m_axi_bresp,
 
     // Debug / Performance counters
-    output wire [31:0]               cycle_counter,
+    output wire [15:0]               cycle_counter,
 
     input  wire                      aclk,
     input  wire                      aresetn
@@ -65,8 +65,8 @@ module core_top (
     reg [3:0] state, state_next;
 
     // Instruction counter
-    reg [31:0] ins_count_curr;
-    reg [31:0] ins_count_total;
+    reg [15:0] ins_count_curr;
+    reg [15:0] ins_count_total;
 
     // Load sub-states (0: A_row_ptr, 1: A_col_idx, 2: A_val, 3: B_row_ptr, 4: B_col_idx, 5: B_val)
     reg [2:0] load_sub_state;
@@ -81,12 +81,12 @@ module core_top (
     //=========================================================================
     // Instruction Decode registers (from SpGEMM instruction)
     //=========================================================================
-    reg [31:0] a_row_ptr_sram;
-    reg [31:0] a_col_idx_sram;
-    reg [31:0] a_val_sram;
-    reg [31:0] b_row_ptr_sram;
-    reg [31:0] b_col_idx_sram;
-    reg [31:0] b_val_sram;
+    reg [15:0] a_row_ptr_sram;
+    reg [15:0] a_col_idx_sram;
+    reg [15:0] a_val_sram;
+    reg [15:0] b_row_ptr_sram;
+    reg [15:0] b_col_idx_sram;
+    reg [15:0] b_val_sram;
     reg [`MAX_DIM_BITS-1:0] M, K, N;
 
     //=========================================================================
@@ -116,7 +116,7 @@ module core_top (
     wire sched_start;
     wire sched_done;
     wire [`N_PE-1:0][`MAX_DIM_BITS-1:0] pe_row_start, pe_row_end;
-    wire [`N_PE-1:0][31:0]              pe_a_ptr_start, pe_a_ptr_end;
+    wire [`N_PE-1:0][15:0]              pe_a_ptr_start, pe_a_ptr_end;
     wire [`N_PE-1:0]                    pe_task_valid;
 
     // PE Array
@@ -147,7 +147,7 @@ module core_top (
     //=========================================================================
     // Cycle counter
     //=========================================================================
-    reg [31:0] cycle_cnt;
+    reg [15:0] cycle_cnt;
     always @(posedge aclk or negedge aresetn) begin
         if (!aresetn) cycle_cnt <= 0;
         else          cycle_cnt <= cycle_cnt + 1;
@@ -294,8 +294,8 @@ module core_top (
     );
 
     // --- Decode SpGEMM instruction ---
-    wire [31:0] sp_a_row_sram, sp_a_col_sram, sp_a_val_sram;
-    wire [31:0] sp_b_row_sram, sp_b_col_sram, sp_b_val_sram;
+    wire [15:0] sp_a_row_sram, sp_a_col_sram, sp_a_val_sram;
+    wire [15:0] sp_b_row_sram, sp_b_col_sram, sp_b_val_sram;
 
     spgemm_decode u_spgemm_decode (
         .inst          (fetch_sp_inst),
@@ -323,7 +323,7 @@ module core_top (
     end
 
     // Fetch instruction ready signals
-    assign fetch_sp_ready = (state == STATE_IDLE) && cr_launch;
+    assign fetch_sp_ready = 1'b1;  // always ready; spgemm insts arrive after LOADs, state already past IDLE
     assign fetch_ld_ready = (state == STATE_LOAD_A || state == STATE_LOAD_B);
     assign fetch_st_ready = (state == STATE_STORE);
     assign fetch_sch_ready = 1'b0; // Scheduler doesn't need explicit inst
@@ -452,8 +452,49 @@ module core_top (
     assign pe_all_done = &pe_done;
 
     // --- C CSR Writer ---
-    // (simplified - detailed in c_csr_writer.v)
-    assign csr_done = pe_all_done;  // placeholder
+    wire csr_done_int;
+    wire                                 csr_wr_en;
+    wire [`OUTBUF_DEPTH_LOG-1:0]         csr_wr_addr;
+    wire [`DATA_WIDTH-1:0]               csr_wr_data;
+
+    c_csr_writer u_csr_writer (
+        .start       (state == STATE_WRITE_CSR),
+        .done        (csr_done_int),
+        .pe_row_valid(pe_out_valid),
+        .pe_row_id   (pe_out_row_id),
+        .pe_nnz      (pe_out_nnz),
+        .pe_col      (pe_out_col),
+        .pe_val      (pe_out_val),
+        .M           (M),
+        .obuf_wr_en  (csr_wr_en),
+        .obuf_wr_addr(csr_wr_addr),
+        .obuf_wr_data(csr_wr_data),
+        .row_ptr_base_addr(),
+        .col_val_base_addr(),
+        .aclk        (aclk),
+        .aresetn     (aresetn)
+    );
+    assign csr_done = csr_done_int;
+
+    // --- Output Scratchpad ---
+    wire                                 osp_rd_en;
+    wire [`OUTBUF_DEPTH_LOG-1:0]         osp_rd_addr;
+    wire [`AXI_DATA_WIDTH-1:0]           osp_rd_data;
+    wire                                 osp_rd_valid;
+
+    output_scratchpad #(
+        .DEPTH(`OUTBUF_DEPTH), .DEPTH_LOG(`OUTBUF_DEPTH_LOG)
+    ) u_outbuf (
+        .wr_en   (csr_wr_en),
+        .wr_addr (csr_wr_addr),
+        .wr_data (csr_wr_data),
+        .rd_en   (osp_rd_en),
+        .rd_addr (osp_rd_addr),
+        .rd_data (osp_rd_data),
+        .rd_valid(osp_rd_valid),
+        .aclk    (aclk),
+        .aresetn (aresetn)
+    );
 
     // --- Store ---
     store u_store (
@@ -462,10 +503,10 @@ module core_top (
         .inst_data      (fetch_st_inst),
         .ext_valid      (state == STATE_STORE),
         .done           (store_done),
-        .osp_rd_en      (),
-        .osp_rd_addr    (),
-        .osp_rd_data    (0),
-        .osp_rd_valid   (1'b0),
+        .osp_rd_en      (osp_rd_en),
+        .osp_rd_addr    (osp_rd_addr),
+        .osp_rd_data    (osp_rd_data),
+        .osp_rd_valid   (osp_rd_valid),
         .m_axi_awvalid  (m_axi_awvalid),
         .m_axi_awready  (m_axi_awready),
         .m_axi_awaddr   (m_axi_awaddr),
