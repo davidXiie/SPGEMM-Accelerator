@@ -9,44 +9,41 @@
 `include "defines.vh"
 
 //=============================================================================
-// GlobalBuffer: 512-bit wide write, 256-bit banked read
-// Used to cache CSR data from DRAM before distribution to PEs
+// GlobalBuffer: 16-bit wide single-entry SRAM
+// Caches CSR data from DRAM (one FP16 element per address) before
+// distribution to scheduler/PEs.
 //=============================================================================
 module global_buffer #(
     parameter integer DEPTH     = `GBUF_DEPTH,
     parameter integer DEPTH_LOG = `GBUF_DEPTH_LOG
 ) (
-    // Write port (from Load module, 512-bit wide)
+    // Write port (from Load module, 16-bit per element)
     input  wire                      wr_en,
     input  wire [DEPTH_LOG-1:0]      wr_addr,
-    input  wire [`AXI_DATA_WIDTH-1:0] wr_data,
+    input  wire [`DATA_WIDTH-1:0]    wr_data,
 
-    // Read port (to Compute/Scheduler, banked read)
+    // Read port (to scheduler, 16-bit per element)
     input  wire                      rd_en,
     input  wire [DEPTH_LOG-1:0]      rd_addr,
-    output wire [`BANK_BLOCK_SIZE-1:0] rd_data,
+    output wire [`DATA_WIDTH-1:0]    rd_data,
     output wire                      rd_valid,
 
     input  wire                      aclk,
     input  wire                      aresetn
 );
 
-    localparam integer N_BANKS = `AXI_DATA_WIDTH / `BANK_BLOCK_SIZE;  // 512/128 = 4 banks
-    localparam integer N_BANKS_LOG = 2;
-
-    // SRAM storage: N_BANKS of DEPTH-depth, BANK_BLOCK_SIZE wide
-    reg [`BANK_BLOCK_SIZE-1:0] ram [0:DEPTH-1];
+    // SRAM storage: one 16-bit FP16 element per address
+    reg [`DATA_WIDTH-1:0] ram [0:DEPTH-1];
     integer i;
 
-    // Write: broadcast to all banks
     always @(posedge aclk) begin
         if (wr_en) begin
-            ram[wr_addr] <= wr_data[`BANK_BLOCK_SIZE-1:0];
+            ram[wr_addr] <= wr_data;
         end
     end
 
-    // Read: bank selection via low address bits
-    reg [`BANK_BLOCK_SIZE-1:0] rd_data_reg;
+    // Read: registered output
+    reg [`DATA_WIDTH-1:0] rd_data_reg;
     reg rd_valid_reg;
 
     always @(posedge aclk or negedge aresetn) begin

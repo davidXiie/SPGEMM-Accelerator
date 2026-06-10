@@ -62,6 +62,9 @@ module tb_core_top;
         cr_launch  = 1'b0;
         ins_baddr  = 64'h0;
         ins_count  = 16'd0;
+        // FST waveform dump
+        $dumpfile("dump.fst");
+        $dumpvars(0, tb_core_top);
 
         m_axi_arready = 1'b0;
         m_axi_rvalid  = 1'b0;
@@ -105,7 +108,11 @@ module tb_core_top;
         aresetn   = 1'b0;
         cr_launch = 1'b0;
         ins_baddr = 64'h0;
-        ins_count = 32'd0;
+        ins_count = 16'd0;
+`ifdef COCOTB_DUMP_WAVE
+        $dumpfile("dump.fst");
+        $dumpvars(0, tb_core_top);
+`endif
     end
 `endif
 

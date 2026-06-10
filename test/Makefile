@@ -4,12 +4,17 @@
 # Brief    : Cocotb Makefile — builds and runs SpGEMM accelerator simulation
 #
 # Usage:
-#   make                  # Run default test (test_spgemm_tc1)
+#   make                  # Run default test (test_spgemm_tc1) + waveform
 #   make SIM=icarus       # Force Icarus Verilog
 #   make SIM=verilator    # Force Verilator
 #   make TESTCASE=test_quick_launch  # Run specific test
+#   make WAVES=0          # Run without waveform
+#   make wave             # Open waveform in gtkwave
 #   make clean            # Remove build artifacts
 #=============================================================================
+
+# --- Waveform ---
+WAVES ?= 1
 
 # --- Simulation ---
 SIM ?= icarus
@@ -39,12 +44,11 @@ endif
 MODULE = test_dut
 TESTCASE ?= test_spgemm_tc1
 
-# Enable waveform dumping (use gtkwave to view)
-# Set WAVES=1 to enable VCD dump
+# Enable waveform dumping (FST format, view with gtkwave)
+# Usage: make WAVES=1
 ifeq ($(WAVES),1)
     ifeq ($(SIM),icarus)
-        PLUSARGS += -fst
-        COMPILE_ARGS += -DCOCOTB_ENABLE_VCD
+        COMPILE_ARGS += -DCOCOTB_DUMP_WAVE
     endif
 endif
 
@@ -68,4 +72,9 @@ gen_data:
 # Clean build artifacts
 clean::
 	rm -rf __pycache__ *.pyc sim_build results.xml
-	rm -rf data/ram.txt data/golden.txt
+	rm -rf data/ram.txt data/ideal_result.txt
+	rm -f dump.fst dump.vcd
+
+# Open waveform with gtkwave (loads pre-configured signal layout)
+wave:
+	gtkwave sim_build/core_top.fst wave.gtkw &

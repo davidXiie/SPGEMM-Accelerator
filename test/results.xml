@@ -1,6 +1,6 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1780975926" />
-    <testcase name="test_spgemm_tc1" classname="test_dut" file="/mnt/d/BaiduSyncdisk/PROJECT/SPGEMM-Accelerator/test/test_dut.py" lineno="415" time="166.0189073085785" sim_time_ns="10001060.001" ratio_time="60240.48804520247" />
+    <property name="random_seed" value="1781100857" />
+    <testcase name="test_spgemm_tc1" classname="test_dut" file="/mnt/d/BaiduSyncdisk/PROJECT/SPGEMM-Accelerator/test/test_dut.py" lineno="408" time="248.7799801826477" sim_time_ns="10001060.001" ratio_time="40200.42124634581" />
   </testsuite>
 </testsuites>

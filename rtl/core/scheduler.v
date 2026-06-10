@@ -27,7 +27,7 @@ module scheduler (
     input  wire [`MAX_DIM_BITS-1:0]  K,
     input  wire [`MAX_DIM_BITS-1:0]  N,
 
-    // SRAM base addresses (offsets in GlobalBuffer, each entry = BANK_BLOCK_SIZE bits)
+    // SRAM base addresses (offsets in GlobalBuffer, each entry = 16-bit)
     input  wire [15:0]               a_row_ptr_base,
     input  wire [15:0]               a_col_idx_base,
     input  wire [15:0]               b_row_ptr_base,
@@ -42,7 +42,7 @@ module scheduler (
     // GlobalBuffer read interface
     output reg                       gbuf_rd_en,
     output reg  [`GBUF_DEPTH_LOG-1:0] gbuf_rd_addr,
-    input  wire [`BANK_BLOCK_SIZE-1:0] gbuf_rd_data,
+    input  wire [`DATA_WIDTH-1:0]    gbuf_rd_data,
     input  wire                      gbuf_rd_valid,
 
     input  wire                      aclk,
@@ -119,7 +119,7 @@ module scheduler (
     // Pipeline registers
     //=========================================================================
     reg rdata_valid_r;
-    reg [`BANK_BLOCK_SIZE-1:0] rdata_r;
+    reg [`DATA_WIDTH-1:0] rdata_r;
     reg gbuf_rd_valid_r;
 
     //=========================================================================
@@ -260,11 +260,11 @@ module scheduler (
             if (rdata_valid_r) begin
                 if (!b_read_phase) begin
                     // Just read B_row_ptr[k] (lower 32 bits)
-                    b_row_ptr_k <= rdata_r[15:0];
+                    b_row_ptr_k <= rdata_r;
                     b_read_phase <= 1'b1;
                 end else begin
                     // Just read B_row_ptr[k+1]
-                    b_row_ptr_kp1 <= rdata_r[15:0];
+                    b_row_ptr_kp1 <= rdata_r;
                     b_read_phase <= 1'b0;
                     b_row_ptr_idx <= b_row_ptr_idx + 1'b1;
                 end
@@ -275,7 +275,7 @@ module scheduler (
     // Store b_row_nnz[k] when both reads complete
     always @(posedge aclk) begin
         if (phase == PHASE_B_ROW_NNZ && rdata_valid_r && b_read_phase) begin
-            b_row_nnz[b_row_ptr_idx] <= rdata_r[15:0] - b_row_ptr_k;
+            b_row_nnz[b_row_ptr_idx] <= rdata_r - b_row_ptr_k;
         end
     end
 
@@ -308,11 +308,11 @@ module scheduler (
                 case (ana_sub)
                     ANA_RD_PTR_I: begin
                         // Got A_row_ptr[i] from [15:0]
-                        a_ptr_start_i <= rdata_r[15:0];
+                        a_ptr_start_i <= rdata_r;
                     end
                     ANA_RD_PTR_IP1: begin
                         // Got A_row_ptr[i+1]
-                        a_ptr_end_i <= rdata_r[15:0];
+                        a_ptr_end_i <= rdata_r;
                         a_ptr_current <= a_ptr_start_i;  // start scanning from p = a_start
                         row_eff_acc <= 0;  // clear accumulator for new row
                     end
@@ -433,12 +433,12 @@ module scheduler (
                 case (task_sub)
                     TASK_RD_START: begin
                         // Got A_row_ptr[pe_row_start[p]]
-                        task_start_val <= rdata_r[15:0];
+                        task_start_val <= rdata_r;
                     end
                     TASK_RD_END: begin
                         // Got A_row_ptr[pe_row_end[p]+1]
                         pe_a_ptr_start[task_pe_idx] <= task_start_val;
-                        pe_a_ptr_end[task_pe_idx]   <= rdata_r[15:0];
+                        pe_a_ptr_end[task_pe_idx]   <= rdata_r;
                     end
                     TASK_NEXT_PE: begin
                         // No data latch here, just advance PE index
@@ -454,7 +454,7 @@ module scheduler (
 
     //=========================================================================
     // GlobalBuffer Read Address Generation
-    //   Each GBuf address returns BANK_BLOCK_SIZE (64 bits).
+    //   Each GBuf address returns one 16-bit element.
     //   Row_ptr/col_idx values are 16-bit, extracted from [15:0] of result.
     //=========================================================================
     always @(*) begin

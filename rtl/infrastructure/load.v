@@ -3,18 +3,22 @@
 // Project  : SPGEMM-Accelerator
 // Brief    : Load module - load A/B CSR data from DRAM to GlobalBuffer via AXI.
 //           Reusable from old SPMM accelerator (remapped from Load.scala)
+//
+// Key fix: AXI beat (512-bit) is expanded into 32 × 16-bit element writes.
+// Each GlobalBuffer address stores exactly one 16-bit entry.
+// This ensures scheduler/pe_decompress read B_row_ptr[k] at addr = base + k
+// (instead of base + k/32 with the old 512-bit-wide write bug).
 //=============================================================================
 
 `include "defines.vh"
 
 module load #(
-    parameter integer INST_QUEUE_DEPTH = 4,
-    parameter integer DATA_QUEUE_DEPTH = 16
+    parameter integer INST_QUEUE_DEPTH = 4
 ) (
     // Instruction input (from Fetch)
     input  wire                      inst_valid,
     output wire                      inst_ready,
-    input  wire [`INST_WIDTH-1:0]    inst_data,
+    input  wire [`INST_WIDTH-1:0]  inst_data,
 
     // Control
     input  wire                      ext_valid,  // from core state machine
@@ -31,19 +35,20 @@ module load #(
     input  wire [`AXI_DATA_WIDTH-1:0] m_axi_rdata,
     input  wire                      m_axi_rlast,
 
-    // Write to GlobalBuffer
+    // Write to GlobalBuffer (one 16-bit element per address)
     output wire                      gbuf_wr_en,
     output wire [`GBUF_DEPTH_LOG-1:0] gbuf_wr_addr,
-    output wire [`AXI_DATA_WIDTH-1:0] gbuf_wr_data,
+    output wire [`DATA_WIDTH-1:0]   gbuf_wr_data,
 
     input  wire                      aclk,
     input  wire                      aresetn
 );
 
-    localparam STATE_IDLE          = 3'd0;
-    localparam STATE_READ_CMD      = 3'd1;
-    localparam STATE_READ_DATA     = 3'd2;
-    localparam STATE_DELAY         = 3'd3;
+    localparam STATE_IDLE       = 3'd0;
+    localparam STATE_READ_CMD   = 3'd1;
+    localparam STATE_READ_DATA  = 3'd2;
+    localparam STATE_DRAIN_BEAT = 3'd3;  // expand one beat to 32 × 16-bit writes
+    localparam STATE_DELAY      = 3'd4;
 
     reg [2:0] state, state_next;
     reg done_reg;
@@ -63,31 +68,39 @@ module load #(
     );
 
     // Transfer calculation
-    wire [15:0] n_block_per_transfer = `AXI_DATA_WIDTH / `DATA_WIDTH;  // 512/16 = 32 FP16 elements per beat
-    wire [15:0] n_block_per_transfer_log = 5;  // log2(32)
-    wire [15:0] transfer_total = ((xsize - 1) >> n_block_per_transfer_log) + 1;
+    // N_ELEM_PER_BEAT = 32: each AXI beat carries 32 × 16-bit elements
+    wire [15:0] n_elem_per_beat      = `N_ELEM_PER_AXI_BEAT;           // 32
+    wire [15:0] n_elem_per_beat_log = `DATA_BITS_LOG2 + `N_MAC_BITS;  // 2+3 = 5, log2(32)
+    wire [15:0] n_beats_per_transfer  = ((xsize - 1) >> n_elem_per_beat_log) + 1;
 
     reg [`AXI_ADDR_WIDTH-1:0] raddr;
     reg [7:0]  rlen;
     reg [7:0]  rlen_rem;
     reg [15:0] transfer_rem;
-    reg [15:0] saddr;
-    reg [15:0] max_transfer;
+    reg [15:0] saddr;          // current element address in GlobalBuffer (16-bit entry addr)
+    localparam MAX_TRANSFER = (1 << `AXI_LEN_WIDTH);  // max beats per AXI burst (=256)
 
-    // Data queue
-    reg [DATA_QUEUE_DEPTH-1:0][`AXI_DATA_WIDTH-1:0] data_q;
-    reg [DATA_QUEUE_DEPTH-1:0][`GBUF_DEPTH_LOG-1:0] addr_q;
-    reg [4:0] data_wr_ptr, data_rd_ptr;
-    wire data_q_empty, data_q_full;
-    wire [4:0] data_q_count;
+    //=========================================================================
+    // Beat capture & element expansion
+    //=========================================================================
+    // Holding register: captures one full 512-bit AXI beat
+    reg [`AXI_DATA_WIDTH-1:0] beat_reg;
+    reg                       beat_valid_r;
 
-    assign data_q_count = (data_wr_ptr >= data_rd_ptr) ?
-                          (data_wr_ptr - data_rd_ptr) :
-                          (DATA_QUEUE_DEPTH + data_wr_ptr - data_rd_ptr);
-    assign data_q_empty = (data_q_count == 0);
-    assign data_q_full  = (data_q_count >= DATA_QUEUE_DEPTH - 1);
+    // Element drain counter: 0..31, expands one beat into 32 writes
+    // n_elem_per_beat_log = 5, but iverilog doesn't support localparam as width, so hardcode
+    reg [4:0] elem_idx;
+    wire [`DATA_WIDTH-1:0] elem_data;
 
-    // Instruction queue
+    // AXI-side backpressure: stall until current beat is fully drained
+    reg axi_busy_r;
+
+    // Element extracted from beat_reg: elem_idx=0 → lower 16 bits
+    assign elem_data = beat_reg[elem_idx * `DATA_WIDTH +: `DATA_WIDTH];
+
+    //=========================================================================
+    // Instruction queue (minimal, one instruction deep)
+    //=========================================================================
     reg inst_q_valid;
     wire inst_q_ready;
     reg inst_start;
@@ -113,74 +126,113 @@ module load #(
         end
     end
 
-    // Start
     always @(posedge aclk) begin
         inst_start <= inst_q_valid && inst_q_ready;
     end
 
+    //=========================================================================
     // State machine
+    //=========================================================================
     always @(posedge aclk or negedge aresetn) begin
         if (!aresetn) begin
-            state   <= STATE_IDLE;
-            done_reg <= 1'b0;
-            raddr   <= 0;
-            saddr   <= 0;
-            rlen    <= 0;
-            rlen_rem <= 0;
+            state       <= STATE_IDLE;
+            done_reg    <= 1'b0;
+            raddr       <= 0;
+            saddr       <= 0;
+            rlen        <= 0;
+            rlen_rem    <= 0;
             transfer_rem <= 0;
-            max_transfer <= 0;
+            beat_reg    <= 0;
+            beat_valid_r <= 1'b0;
+            elem_idx    <= 0;
+            axi_busy_r  <= 1'b0;
         end else begin
             state <= state_next;
+
             case (state)
                 STATE_IDLE: begin
-                    done_reg <= 1'b0;
+                    done_reg     <= 1'b0;
+                    axi_busy_r   <= 1'b0;
+                    beat_valid_r <= 1'b0;
                     if (inst_start) begin
-                        max_transfer <= (1 << `AXI_LEN_WIDTH);
                         if (xsize == 0) begin
                             state <= STATE_DELAY;
                         end else begin
-                            if (transfer_total < max_transfer) begin
-                                rlen    <= transfer_total[7:0] - 1;
-                                rlen_rem <= transfer_total[7:0] - 1;
+                            if (n_beats_per_transfer < MAX_TRANSFER) begin
+                                rlen        <= n_beats_per_transfer[7:0] - 1;
+                                rlen_rem    <= n_beats_per_transfer[7:0] - 1;
                                 transfer_rem <= 0;
                             end else begin
-                                rlen    <= max_transfer[7:0] - 1;
-                                rlen_rem <= max_transfer[7:0] - 1;
-                                transfer_rem <= transfer_total - max_transfer;
+                                rlen        <= MAX_TRANSFER[7:0] - 1;
+                                rlen_rem    <= MAX_TRANSFER[7:0] - 1;
+                                transfer_rem <= n_beats_per_transfer - MAX_TRANSFER;
                             end
                             raddr <= dram_offset;
                             saddr <= sram_offset;
                         end
                     end
                 end
+
                 STATE_READ_CMD: begin
                     // wait for arready
                 end
+
                 STATE_READ_DATA: begin
+                    // AXI handshake: capture beat, begin expansion
                     if (m_axi_rvalid && m_axi_rready) begin
-                        saddr <= saddr + (`AXI_DATA_WIDTH / 8);
-                        if (rlen_rem == 0) begin
-                            if (transfer_rem == 0)
-                                state <= STATE_DELAY;
-                            else if (transfer_rem < max_transfer) begin
-                                rlen <= transfer_rem[7:0] - 1;
-                                rlen_rem <= transfer_rem[7:0] - 1;
-                                transfer_rem <= 0;
-                            end else begin
-                                rlen <= max_transfer[7:0] - 1;
-                                rlen_rem <= max_transfer[7:0] - 1;
-                                transfer_rem <= transfer_rem - max_transfer;
-                            end
-                            raddr <= raddr + (max_transfer * (`AXI_DATA_WIDTH / 8));
-                        end else begin
-                            rlen_rem <= rlen_rem - 1;
-                        end
+                        beat_reg     <= m_axi_rdata;
+                        beat_valid_r <= 1'b1;
+                        axi_busy_r   <= 1'b1;
+                        elem_idx     <= 0;
+                        // Always drain this beat before accepting the next one.
+                        // Next-burst preparation is deferred to STATE_DRAIN_BEAT.
+                        state <= STATE_DRAIN_BEAT;
                     end
                 end
+
+                STATE_DRAIN_BEAT: begin
+                    // Expand one beat (32 × 16-bit) to GlobalBuffer
+                    if (gbuf_wr_en) begin
+                        saddr   <= saddr + 1;              // each 16-bit element = one addr
+                        elem_idx <= elem_idx + 1;
+                        if (elem_idx == n_elem_per_beat - 1) begin
+                            // Last element of this beat written: clear beat, decide next action
+                            elem_idx     <= 0;
+                            beat_valid_r <= 1'b0;
+                            axi_busy_r   <= 1'b0;
+                            if (rlen_rem > 0) begin
+                                // More beats remain in current AXI burst
+                                rlen_rem <= rlen_rem - 1;
+                                state <= STATE_READ_DATA;
+                            end else begin
+                                // Current AXI burst finished
+                                if (transfer_rem > 0) begin
+                                    // Prepare next AXI burst
+                                    if (transfer_rem < MAX_TRANSFER) begin
+                                        rlen        <= transfer_rem[7:0] - 1;
+                                        rlen_rem    <= transfer_rem[7:0] - 1;
+                                        transfer_rem <= 0;
+                                    end else begin
+                                        rlen        <= MAX_TRANSFER[7:0] - 1;
+                                        rlen_rem    <= MAX_TRANSFER[7:0] - 1;
+                                        transfer_rem <= transfer_rem - MAX_TRANSFER;
+                                    end
+                                    raddr <= raddr + (MAX_TRANSFER * (`AXI_DATA_WIDTH / 8));
+                                    state <= STATE_READ_CMD;
+                                end else begin
+                                    // All bursts done
+                                    state <= STATE_DELAY;
+                                end
+                            end
+                        end
+                    end
+                    // If gbuf_wr_en is deasserted (backpressure), stay and retry
+                end
+
                 STATE_DELAY: begin
-                    if (data_q_empty) begin
+                    if (!beat_valid_r) begin
                         done_reg <= 1'b1;
-                        state <= STATE_IDLE;
+                        state    <= STATE_IDLE;
                     end
                 end
             endcase
@@ -200,51 +252,37 @@ module load #(
                 end
             end
             STATE_READ_CMD: begin
-                if (data_q_empty && m_axi_arready)
+                if (m_axi_arready)
                     state_next = STATE_READ_DATA;
             end
             STATE_READ_DATA: begin
                 // handled in sequential block
             end
+            STATE_DRAIN_BEAT: begin
+                // handled in sequential block
+            end
             STATE_DELAY: begin
-                if (data_q_empty && done_reg)
+                if (!beat_valid_r)
                     state_next = STATE_IDLE;
             end
         endcase
     end
 
-    // AXI read command
-    assign m_axi_arvalid = (state == STATE_READ_CMD) && data_q_empty;
+    //=========================================================================
+    // AXI Read Command
+    //=========================================================================
+    assign m_axi_arvalid = (state == STATE_READ_CMD);
     assign m_axi_araddr  = raddr;
     assign m_axi_arlen   = rlen;
-    assign m_axi_rready  = (state == STATE_READ_DATA) && !data_q_full;
+    // Stall AXI read until current beat is fully drained
+    assign m_axi_rready  = (state == STATE_READ_DATA) && !axi_busy_r;
 
-    // Data queue write (from AXI R channel)
-    always @(posedge aclk or negedge aresetn) begin
-        if (!aresetn) begin
-            data_wr_ptr <= 0;
-        end else begin
-            if (state == STATE_READ_DATA && m_axi_rvalid && m_axi_rready) begin
-                data_q[data_wr_ptr[3:0]] <= m_axi_rdata;
-                addr_q[data_wr_ptr[3:0]] <= saddr[`GBUF_DEPTH_LOG-1:0];
-                data_wr_ptr <= data_wr_ptr + 1'b1;
-            end
-        end
-    end
-
-    // Data queue read (to GlobalBuffer)
-    always @(posedge aclk or negedge aresetn) begin
-        if (!aresetn) begin
-            data_rd_ptr <= 0;
-        end else begin
-            if (gbuf_wr_en)
-                data_rd_ptr <= data_rd_ptr + 1'b1;
-        end
-    end
-
-    assign gbuf_wr_en   = !data_q_empty;
-    assign gbuf_wr_addr = addr_q[data_rd_ptr[3:0]];
-    assign gbuf_wr_data = data_q[data_rd_ptr[3:0]];
+    //=========================================================================
+    // GlobalBuffer Write (one 16-bit element per address)
+    //=========================================================================
+    assign gbuf_wr_en   = beat_valid_r && (state == STATE_DRAIN_BEAT);
+    assign gbuf_wr_addr = saddr;
+    assign gbuf_wr_data = elem_data;
 
     assign done = done_reg;
 

@@ -26,3 +26,6 @@ rtl/
 ├── sim/tb_core_top.v           # Testbench (AXI内存模型+基本激励)
 ├── filelist.f                  # 仿真文件列表
 └── README.md                   # 完整使用说明
+
+
+gtkwave sim_build/core_top.fst

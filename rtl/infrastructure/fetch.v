@@ -64,21 +64,21 @@ module fetch #(
     wire queue_empty, queue_full;
 
     // State machine
-    localparam S_IDLE      = 3'd0;
-    localparam S_READ_CMD  = 3'd1;
-    localparam S_READ_DATA = 3'd2;
-    localparam S_DRAIN     = 3'd3;
-    localparam S_SPLIT     = 3'd4;
+    localparam S_IDLE      = 3'd0;      // 空闲状态
+    localparam S_READ_CMD  = 3'd1;      // 发送读命令
+    localparam S_READ_DATA = 3'd2;      // 读取数据
+    localparam S_DRAIN     = 3'd3;      // 排空队列，分发指令
+    localparam S_SPLIT     = 3'd4;      // 拆分AXI beat中的指令
 
     reg [2:0] state, state_next;
 
     // Counters
-    reg [`AXI_ADDR_WIDTH-1:0] raddr;
-    reg [7:0]  rlen;
-    reg [7:0]  ilen;
-    reg [15:0] xrem;
-    reg [15:0] xsize;
-    reg [15:0] xmax;
+    reg [`AXI_ADDR_WIDTH-1:0] raddr;        // 当前读地址
+    reg [7:0]  rlen;                           // AXI突发长度
+    reg [7:0]  ilen;                            //期望接收的beat数量
+    reg [15:0] xrem;                        // 剩余要读取的指令批次数
+    reg [15:0] xsize;                       // 总指令批次数
+    reg [15:0] xmax;                        // 最大批次大小
 
     // Split state
     reg [INS_PER_TRANSFER_LOG:0] pack_sel;  // which instruction in the AXI beat

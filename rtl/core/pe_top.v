@@ -31,7 +31,7 @@ module pe_top #(
     // GlobalBuffer read (for loading B CSR into local buffer)
     output reg                       gbuf_rd_en,
     output reg  [`GBUF_DEPTH_LOG-1:0] gbuf_rd_addr,
-    input  wire [`BANK_BLOCK_SIZE-1:0] gbuf_rd_data,
+    input  wire [`DATA_WIDTH-1:0]    gbuf_rd_data,
     input  wire                      gbuf_rd_valid,
 
     // Output to CSR Writer

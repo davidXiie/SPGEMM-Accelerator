@@ -8,7 +8,7 @@
 # Usage    : python gen_data.py
 # Input    : test_case_for_reference/TC1_RAW/*.txt
 # Output   : data/ram.txt (binary memory image)
-#            data/golden.txt (software reference C = A × B)
+#            data/ideal_result.txt (software reference C = A × B)
 #=============================================================================
 
 import os
@@ -246,58 +246,39 @@ def build_csr_from_csc(index_cols, matrix_meta, K):
     return row_ptr, col_idx, val_fp16, M
 
 
-def csr_spgemm_golden(A_row, A_col, A_val_fp16, A_M, K,
-                       B_row, B_col, B_val_fp16, K_B, N):
-    """
-    Software golden reference: C = A × B in CSR format.
-    Uses Python floats for simplicity (FP16 precision is fine for small integers).
-    Returns (C_row_ptr, C_col_idx, C_val_fp16, C_M, C_N)
-    """
-    assert K == K_B, f"Dimension mismatch: K={K}, K_B={K_B}"
 
+#=============================================================================
+# Software SpGEMM (compute ideal reference C = A×B)
+#=============================================================================
+def csr_spgemm_ideal(A_row, A_col, A_val_fp16, A_M, K,
+                       B_row, B_col, B_val_fp16, K_B, N):
+    assert K == K_B, f"Dimension mismatch: K={K}, K_B={K_B}"
     C_M = A_M
     C_N = N
     C_row_ptr = [0]
     C_col = []
     C_val = []
-
     for i in range(A_M):
-        # SPA: column-indexed accumulator for row i
-        row_accum = {}  # col → float sum
-
+        row_accum = {}
         a_start = A_row[i]
         a_end   = A_row[i + 1]
-
         for a_idx in range(a_start, a_end):
             a_col = A_col[a_idx]
             a_val = struct.unpack('e', struct.pack('<H', A_val_fp16[a_idx]))[0]
-
-            # For each non-zero in A row i at column a_col,
-            # multiply with corresponding row a_col of B
             if a_col >= len(B_row) - 1:
-                continue  # skip out-of-bounds
-
+                continue
             b_start = B_row[a_col]
             b_end   = B_row[a_col + 1]
-
             for b_idx in range(b_start, b_end):
                 b_col = B_col[b_idx]
                 b_val = struct.unpack('e', struct.pack('<H', B_val_fp16[b_idx]))[0]
-
                 product = a_val * b_val
-                if b_col in row_accum:
-                    row_accum[b_col] += product
-                else:
-                    row_accum[b_col] = product
-
-        # Convert SPA row_accum to sorted column list
+                row_accum[b_col] = row_accum.get(b_col, 0.0) + product
         sorted_cols = sorted(row_accum.keys())
         for c in sorted_cols:
             C_col.append(c)
             C_val.append(float_to_fp16(row_accum[c]))
-
         C_row_ptr.append(len(C_col))
-
     return C_row_ptr, C_col, C_val, C_M, C_N
 
 
@@ -341,7 +322,7 @@ def main():
     # Collect all instructions and packed data
     all_instructions = []       # list of 256-bit instruction integers
     all_packed_data = []        # list of (address, binary_string) pairs
-    all_golden = []             # list of golden C outputs
+    all_ideal = []              # list of ideal C reference outputs
 
     # SRAM base addresses (reused per pair, since SRAM is scratchpad)
     INSTR_BASE = 0x0000
@@ -396,11 +377,11 @@ def main():
         print(f"[GEN] Pair A_{a_id}×B_{b_id}: A={A_M}×{A_K} (nnz={len(A_col_idx)}), "
               f"B={B_K}×{B_N} (nnz={len(B_col_idx)})")
 
-        # Compute golden reference
+        # Compute ideal reference C = A × B
         C_row_ptr, C_col_idx, C_val_fp16, C_M, C_N = \
-            csr_spgemm_golden(A_row_ptr, A_col_idx, A_val_fp16, A_M, A_K,
-                              B_row_ptr, B_col_idx, B_val_fp16, B_K, B_N)
-        print(f"[GEN]   Golden C={C_M}×{C_N} (nnz={len(C_col_idx)})")
+            csr_spgemm_ideal(A_row_ptr, A_col_idx, A_val_fp16, A_M, A_K,
+                             B_row_ptr, B_col_idx, B_val_fp16, B_K, B_N)
+        print(f"[GEN]   Ideal C={C_M}×{C_N} (nnz={len(C_col_idx)})")
 
         # Pack CSR arrays to binary
         # row_ptr: 32-bit elements
@@ -451,13 +432,12 @@ def main():
         all_packed_data.append((B_COL_DRAM, b_col_bin))
         all_packed_data.append((B_VAL_DRAM, b_val_bin))
 
-        all_golden.append({
+        all_ideal.append({
             'C_row_ptr': C_row_ptr,
             'C_col_idx': C_col_idx,
             'C_val_fp16': C_val_fp16,
             'C_M': C_M,
             'C_N': C_N,
-            'out_base': OUT_DRAM
         })
 
         pair_info.append({
@@ -521,19 +501,18 @@ def main():
     print(f"[GEN]   Instructions: {total_inst_count} × 256-bit")
     print(f"[GEN]   Data sections: {len(all_packed_data)}")
 
-    # Write golden.txt (for testbench verification)
-    golden_path = os.path.join(data_dir, 'golden.txt')
-    with open(golden_path, 'w') as f:
-        f.write(f"# Golden reference for {len(pairs)} SpGEMM pairs\n")
-        for i, g in enumerate(all_golden):
-            f.write(f"# --- Pair {i}: C={g['C_M']}×{g['C_N']}, nnz={len(g['C_col_idx'])} "
-                    f"(out_base={g['out_base']:#x}) ---\n")
+    # Write ideal_result.txt (software reference for testbench comparison)
+    ideal_path = os.path.join(data_dir, 'ideal_result.txt')
+    with open(ideal_path, 'w') as f:
+        f.write(f"# Ideal reference for {len(pairs)} SpGEMM pairs\n")
+        for i, g in enumerate(all_ideal):
+            f.write(f"# --- Pair {i}: C={g['C_M']}×{g['C_N']}, nnz={len(g['C_col_idx'])} ---\n")
             f.write(f"M={g['C_M']} N={g['C_N']} NNZ={len(g['C_col_idx'])}\n")
             f.write(f"ROW_PTR: {','.join(str(x) for x in g['C_row_ptr'])}\n")
             f.write(f"COL_IDX: {','.join(str(x) for x in g['C_col_idx'])}\n")
             f.write(f"VAL:     {','.join(str(x) for x in g['C_val_fp16'])}\n")
             f.write("\n")
-    print(f"[GEN] golden.txt written: {golden_path}")
+    print(f"[GEN] ideal_result.txt written: {ideal_path}")
 
     # Summary
     print(f"\n[GEN] ============ Summary ============")

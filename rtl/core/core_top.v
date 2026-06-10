@@ -11,13 +11,13 @@
 
 module core_top (
     // Control Register interface (AXI-Lite slave signals via Wrapper)
-    input  wire                      cr_launch,
-    input  wire [`AXI_ADDR_WIDTH-1:0] ins_baddr,
-    input  wire [15:0]               ins_count,
-    output wire                      cr_finish,
+    input  wire                      cr_launch,     //启动信号
+    input  wire [`AXI_ADDR_WIDTH-1:0] ins_baddr,     //指令起始地址
+    input  wire [15:0]               ins_count,        ///指令数量
+    output wire                      cr_finish,         //完成信号
 
     // AXI Read Master (for Fetch + Load)
-    output wire                      m_axi_arvalid,
+    output wire                      m_axi_arvalid,     
     input  wire                      m_axi_arready,
     output wire [`AXI_ADDR_WIDTH-1:0] m_axi_araddr,
     output wire [7:0]                m_axi_arlen,
@@ -104,12 +104,12 @@ module core_top (
     wire load_done;
     wire load_gbuf_wr_en;
     wire [`GBUF_DEPTH_LOG-1:0] load_gbuf_wr_addr;
-    wire [`AXI_DATA_WIDTH-1:0] load_gbuf_wr_data;
+    wire [`DATA_WIDTH-1:0]   load_gbuf_wr_data;
 
     // GlobalBuffer
     wire gbuf_rd_en;
     wire [`GBUF_DEPTH_LOG-1:0] gbuf_rd_addr;
-    wire [`BANK_BLOCK_SIZE-1:0] gbuf_rd_data;
+    wire [`DATA_WIDTH-1:0]     gbuf_rd_data;
     wire gbuf_rd_valid;
 
     // Scheduler
@@ -167,27 +167,27 @@ module core_top (
 
             case (state)
                 STATE_IDLE: begin
-                    load_sub_state <= LOAD_A_ROW;
+                    load_sub_state <= LOAD_A_ROW;       //开始的话要从A_row开始
                     if (cr_launch)
-                        ins_count_total <= ins_count;
+                        ins_count_total <= ins_count;       //存储指令数
                 end
                 STATE_LOAD_A: begin
                     if (load_done) begin
-                        if (load_sub_state == LOAD_DONE)
+                        if (load_sub_state == LOAD_DONE)        //一个子状态结束就切换到下一个子状态
                             load_sub_state <= LOAD_B_ROW;
                         else
-                            load_sub_state <= load_sub_state + 1;
+                            load_sub_state <= load_sub_state + 1;       //继续下一个子状态
                     end
                 end
                 STATE_LOAD_B: begin
                     if (load_done) begin
-                        if (load_sub_state == LOAD_DONE)
+                        if (load_sub_state == LOAD_DONE)        //一个子状态结束就切换到下一个子状态
                             load_sub_state <= LOAD_DONE;
                         else
                             load_sub_state <= load_sub_state + 1;
                     end
                 end
-                STATE_SCHEDULE: begin
+                STATE_SCHEDULE: begin       //运行调度
                     // wait for scheduler done
                 end
                 STATE_COMPUTE: begin
@@ -197,7 +197,7 @@ module core_top (
                     // wait for CSR writer done
                 end
                 STATE_STORE: begin
-                    if (store_done) begin
+                    if (store_done) begin                       //指令寄存器加一
                         ins_count_curr <= ins_count_curr + 1;
                     end
                 end
@@ -324,8 +324,8 @@ module core_top (
 
     // Fetch instruction ready signals
     assign fetch_sp_ready = 1'b1;  // always ready; spgemm insts arrive after LOADs, state already past IDLE
-    assign fetch_ld_ready = (state == STATE_LOAD_A || state == STATE_LOAD_B);
-    assign fetch_st_ready = (state == STATE_STORE);
+    // fetch_ld_ready and fetch_st_ready are driven by load/store modules' inst_ready ports
+    // (not assigned here, to avoid multiple-driver conflict with the modules' internal assign)
     assign fetch_sch_ready = 1'b0; // Scheduler doesn't need explicit inst
 
     // --- AXI Read Mux ---

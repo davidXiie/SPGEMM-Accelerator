@@ -1,0 +1,28 @@
+[*]
+[*] GTKWave Analyzer v3.3.100 (w)1999-2019 BSI
+[*] Wed Jun 10 09:07:51 2026
+[*]
+[dumpfile] "D:\BaiduSyncdisk\PROJECT\SPGEMM-Accelerator\test\sim_build\core_top.fst"
+[dumpfile_mtime] "Wed Jun 10 08:49:58 2026"
+[dumpfile_size] 2150060
+[savefile] "D:\BaiduSyncdisk\PROJECT\SPGEMM-Accelerator\test\wave.gtkw"
+[timestart] 0
+[size] 2560 1369
+[pos] -35 -35
+*-16.000000 64200 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] core_top.
+[treeopen] core_top.u_load.
+[sst_width] 421
+[signals_width] 480
+[sst_expanded] 1
+[sst_vpaned_height] 423
+@28
+core_top.aclk
+@22
+core_top.state[3:0]
+@28
+core_top.u_fetch.state[2:0]
+@29
+core_top.u_load.state[2:0]
+[pattern_trace] 1
+[pattern_trace] 0
