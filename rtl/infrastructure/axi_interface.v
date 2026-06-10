@@ -182,7 +182,6 @@ module axi_read_mux #(
 
     // Priority encoder: lower index = higher priority
     wire [N_CLIENTS-1:0] req_vec = s_axi_arvalid;
-    reg  [N_CLIENTS-1:0] mask;
 
     // Demux tag
     reg [3:0] active_client;
@@ -191,9 +190,9 @@ module axi_read_mux #(
     localparam ARB_IDLE = 1'b0, ARB_BUSY = 1'b1;
     reg arb_state;
 
-    // Read request tracking
-    reg [`AXI_ADDR_WIDTH-1:0] client_addr [0:N_CLIENTS-1];
-    reg [7:0]                client_len  [0:N_CLIENTS-1];
+    // Registered AR channel copy (frozen at AR handshake, stable during R phase)
+    reg [`AXI_ADDR_WIDTH-1:0] ar_addr_reg;
+    reg [7:0]                 ar_len_reg;
 
     wire [N_CLIENTS-1:0] grant;
 
@@ -205,19 +204,43 @@ module axi_read_mux #(
         end
     endgenerate
 
-    // Find active client
+    // Combinational AR channel select (zero-delay, correct from first cycle)
+    reg [`AXI_ADDR_WIDTH-1:0] ar_addr_sel;
+    reg [7:0]                 ar_len_sel;
+    always @(*) begin
+        ar_addr_sel = 0;
+        ar_len_sel  = 0;
+        for (j = 0; j < N_CLIENTS; j = j + 1) begin
+            if (grant[j]) begin
+                ar_addr_sel = s_axi_araddr[j*`AXI_ADDR_WIDTH +: `AXI_ADDR_WIDTH];
+                ar_len_sel  = s_axi_arlen[j*8 +: 8];
+            end
+        end
+    end
+
+    // State machine: stay in IDLE until AR handshake completes
     always @(posedge aclk or negedge aresetn) begin
         if (!aresetn) begin
             active_client <= 0;
-            arb_state <= ARB_IDLE;
+            arb_state     <= ARB_IDLE;
+            ar_addr_reg   <= 0;
+            ar_len_reg    <= 0;
         end else begin
             case (arb_state)
                 ARB_IDLE: begin
                     if (|req_vec) begin
                         for (j = 0; j < N_CLIENTS; j = j + 1) begin
-                            if (grant[j]) active_client <= j;
+                            if (grant[j]) begin
+                                active_client <= j;
+                            end
                         end
-                        arb_state <= ARB_BUSY;
+                        // Only enter BUSY after AR handshake completes;
+                        // freeze addr/len at that instant
+                        if (m_axi_arready) begin
+                            ar_addr_reg <= ar_addr_sel;
+                            ar_len_reg  <= ar_len_sel;
+                            arb_state   <= ARB_BUSY;
+                        end
                     end
                 end
                 ARB_BUSY: begin
@@ -229,22 +252,17 @@ module axi_read_mux #(
         end
     end
 
-    // Grant signals
+    // Grant signals: forward m_axi_arready to the granted client while IDLE
     generate
         for (i = 0; i < N_CLIENTS; i = i + 1) begin : gen_grant_out
-            assign s_axi_arready[i] = (arb_state == ARB_IDLE) && grant[i];
+            assign s_axi_arready[i] = (arb_state == ARB_IDLE) && grant[i] && m_axi_arready;
         end
     endgenerate
 
-    // MUX AR channel
-    wire [`AXI_ADDR_WIDTH-1:0] mux_addr;
-    wire [7:0]                 mux_len;
-    assign mux_addr = s_axi_araddr[active_client*`AXI_ADDR_WIDTH +: `AXI_ADDR_WIDTH];
-    assign mux_len  = s_axi_arlen[active_client*8 +: 8];
-
+    // AR channel: combinational during IDLE (immediate), registered during BUSY (stable)
     assign m_axi_arvalid = (arb_state == ARB_IDLE) && (|req_vec);
-    assign m_axi_araddr  = mux_addr;
-    assign m_axi_arlen   = mux_len;
+    assign m_axi_araddr  = (arb_state == ARB_IDLE) ? ar_addr_sel : ar_addr_reg;
+    assign m_axi_arlen   = (arb_state == ARB_IDLE) ? ar_len_sel  : ar_len_reg;
     assign m_axi_arid    = {1'b0, active_client};
     assign m_axi_arsize  = 3'b110;  // 64 bytes per beat
     assign m_axi_arburst = 2'b01;   // INCR
